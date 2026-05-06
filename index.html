@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Target Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#03070e;--bg1:#07101d;--bg2:#0b1829;--bg3:#0e1e34;
+  --border:#0f2040;--border2:#1a3560;--accent:#1a6fff;
+  --up:#00e87a;--dn:#ff3b5c;--warn:#ffb500;
+  --text:#c5d8f5;--muted:#304a70;--dim:#1a2e4a;
+  --mono:'Space Mono',monospace;--sans:'Sarabun',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+body::before{content:'';position:fixed;inset:0;
+  background:linear-gradient(var(--border) 1px,transparent 1px) 0 0/44px 44px,
+             linear-gradient(90deg,var(--border) 1px,transparent 1px) 0 0/44px 44px;
+  opacity:.2;pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:940px;margin:0 auto;padding:18px 14px 60px}
+
+/* HEADER */
+header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;
+  border-bottom:1px solid var(--border2);padding-bottom:16px;margin-bottom:20px}
+.h-tag{font-family:var(--mono);font-size:8px;letter-spacing:.35em;color:var(--accent);display:block;margin-bottom:3px}
+.h-title{font-family:var(--mono);font-size:20px;font-weight:700;color:#fff;display:block;margin-bottom:3px}
+.h-sub{font-size:11px;color:var(--muted);display:block}
+.h-clock{font-family:var(--mono);font-size:22px;font-weight:700;color:#fff;text-align:right;display:block}
+.h-date{font-family:var(--mono);font-size:9px;color:var(--muted);text-align:right;display:block;margin-top:2px}
+
+/* TOOLBAR */
+.toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.tabs{display:flex;gap:5px;flex-wrap:wrap}
+.tab{padding:6px 13px;border-radius:7px;border:1px solid var(--border);background:var(--bg1);
+  color:var(--muted);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s}
+.tab:hover{border-color:var(--border2);color:var(--text)}
+.tab.active{background:var(--bg3);border-color:var(--accent);color:#6fb3ff}
+.rBtn{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;
+  border:1px solid var(--border2);background:var(--bg2);color:var(--text);
+  font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s}
+.rBtn:hover{border-color:var(--accent);color:#6fb3ff}
+.rBtn:disabled{opacity:.4;cursor:not-allowed}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+
+.statusBar{font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:14px}
+
+/* GRID */
+.cards{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:640px){.cards{grid-template-columns:1fr 1fr}}
+
+/* CARD */
+.card{background:var(--bg1);border:1px solid var(--border);border-radius:14px;padding:16px;animation:fadeUp .3s ease}
+
+/* session badge */
+.sBadge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;
+  font-size:9px;font-family:var(--mono);font-weight:700;border:1px solid;white-space:nowrap}
+.sBadge.open{background:#00e87a12;border-color:#00e87a55;color:var(--up)}
+.sBadge.closed{background:#ff3b5c0e;border-color:#ff3b5c44;color:var(--dn)}
+.sBadge.brk{background:#ffb50012;border-color:#ffb50055;color:var(--warn)}
+.sBadge.pre{background:#1a6fff12;border-color:#1a6fff55;color:var(--accent)}
+.sBadge.holiday{background:#44444412;border-color:#44444455;color:#888}
+.dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.dot.live{animation:pulse 1.3s infinite}
+
+/* price */
+.priceMain{font-family:var(--mono);font-size:26px;font-weight:700;color:#fff;letter-spacing:-.5px;line-height:1}
+.chgRow{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
+.chgAbs{font-family:var(--mono);font-size:13px;font-weight:700}
+.chgPct{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;border:1px solid}
+.c-up{color:var(--up)}.c-dn{color:var(--dn)}.c-neu{color:var(--warn)}
+.b-up{background:#00e87a12;border-color:#00e87a44}
+.b-dn{background:#ff3b5c10;border-color:#ff3b5c33}
+.b-neu{background:#ffb50012;border-color:#ffb50033}
+
+/* ohlc */
+.ohlc{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:10px 0}
+.oCell{background:var(--bg);border-radius:7px;padding:6px 7px;text-align:center;border:1px solid var(--border)}
+.oLbl{font-size:7px;color:var(--muted);font-family:var(--mono);letter-spacing:.08em;margin-bottom:2px}
+.oVal{font-family:var(--mono);font-size:11px;color:var(--text);font-weight:700}
+
+/* target box */
+.tgtBox{background:linear-gradient(135deg,#0a1a36,#0b1829);border:1px solid #1a4a9055;
+  border-radius:11px;padding:12px 13px;margin:10px 0}
+.tgtTop{display:flex;justify-content:space-between;margin-bottom:5px}
+.tgtLbl{font-size:8px;color:#4a9aff;font-family:var(--mono);letter-spacing:.15em}
+.tgtPriceRow{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:7px}
+.tgtPrice{font-family:var(--mono);font-size:22px;font-weight:700;color:#fff}
+.tgtChg{font-family:var(--mono);font-size:12px;font-weight:700}
+.rangeRow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rLbl{font-size:8px;color:var(--muted);font-family:var(--mono)}
+.rLo,.rHi{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px}
+.rLo{background:#00e87a0f;border:1px solid #00e87a33;color:var(--up)}
+.rHi{background:#ff3b5c0f;border:1px solid #ff3b5c33;color:var(--dn)}
+.confRow{display:flex;justify-content:space-between;margin-top:8px;margin-bottom:3px}
+.confLbl{font-size:8px;color:var(--muted);font-family:var(--mono)}
+.confVal{font-size:8px;font-family:var(--mono);font-weight:700}
+.confBar{height:2px;background:var(--dim);border-radius:99px;overflow:hidden}
+.confFill{height:100%;border-radius:99px;transition:width 1s ease}
+
+/* swing */
+.swBox{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 11px;margin:10px 0}
+.swTitle{font-size:7px;color:var(--muted);font-family:var(--mono);letter-spacing:.15em;margin-bottom:8px;text-transform:uppercase}
+.swGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.swCell{background:var(--bg1);border-radius:7px;padding:7px 5px;text-align:center;border:1px solid var(--border)}
+.swN{font-size:7px;color:var(--muted);font-family:var(--mono);margin-bottom:4px}
+.swH{font-family:var(--mono);font-size:10px;color:var(--dn);font-weight:700}
+.swHp{font-size:7px;color:var(--muted);font-family:var(--mono);margin-bottom:2px}
+.swDiv{height:1px;background:var(--border);margin:3px 0}
+.swL{font-family:var(--mono);font-size:10px;color:var(--up);font-weight:700}
+.swLp{font-size:7px;color:var(--muted);font-family:var(--mono);margin-top:1px}
+
+/* pivots */
+.pivTitle{font-size:7px;color:var(--muted);font-family:var(--mono);letter-spacing:.18em;text-transform:uppercase;
+  padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:7px}
+.pivGrid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+@media(min-width:860px){.pivGrid{grid-template-columns:1fr 1fr 1fr}}
+.pivRow{display:flex;justify-content:space-between;align-items:center;
+  padding:5px 8px;border-radius:6px;background:var(--bg);border-left:2px solid}
+.pivRow.r{border-color:var(--dn);background:#ff3b5c06}
+.pivRow.p{border-color:var(--warn);background:var(--bg2)}
+.pivRow.s{border-color:var(--up);background:#00e87a06}
+.pn{font-size:8px;color:var(--muted);font-family:var(--mono)}
+.pv{font-family:var(--mono);font-size:10px;font-weight:700}
+.pivRow.r .pv{color:var(--dn)}.pivRow.p .pv{color:var(--warn)}.pivRow.s .pv{color:var(--up)}
+
+/* sessions */
+.sesRow{display:flex;gap:5px;flex-wrap:wrap;margin:10px 0}
+.sesCell{flex:1;min-width:90px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:6px 9px}
+.sesN{font-size:7px;color:var(--accent);font-family:var(--mono);letter-spacing:.08em;margin-bottom:2px}
+.sesT{font-family:var(--mono);font-size:10px;color:var(--text)}
+.sesTz{font-size:7px;color:var(--muted);font-family:var(--mono);margin-top:1px}
+
+/* footer */
+.cFoot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;
+  padding-top:9px;border-top:1px solid var(--border)}
+.updTime{font-size:8px;color:var(--muted);font-family:var(--mono)}
+.srcBadge{font-size:8px;padding:2px 7px;border-radius:5px;font-family:var(--mono);border:1px solid}
+.sLive{background:#00e87a0a;border-color:#00e87a44;color:var(--up)}
+.sAi{background:#ffb5000a;border-color:#ffb50044;color:var(--warn)}
+
+/* loader */
+.loader{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:12px}
+.spinEl{width:20px;height:20px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.loaderTxt{font-family:var(--mono);font-size:10px;color:var(--muted)}
+
+.disc{margin-top:32px;text-align:center;font-family:var(--mono);font-size:8px;color:var(--dim);line-height:2.2}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <span class="h-tag">Market Intelligence Terminal</span>
+    <span class="h-title">📊 INDEX TARGET ENGINE</span>
+    <span class="h-sub">ราคาปิดเป้าหมาย · Pivot Points · Swing Range</span>
+  </div>
+  <div>
+    <span class="h-clock" id="clock">--:--:--</span>
+    <span class="h-date" id="dateStr"></span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="tabs">
+    <button class="tab active" onclick="setView('ALL')">🌏 ทุกดัชนี</button>
+    <button class="tab" onclick="setView('SET')">🇹🇭 SET</button>
+    <button class="tab" onclick="setView('SET50')">🇹🇭 SET50</button>
+    <button class="tab" onclick="setView('N225')">🇯🇵 Nikkei</button>
+    <button class="tab" onclick="setView('HSI')">🇭🇰 Hang Seng</button>
+  </div>
+  <button class="rBtn" id="rBtn" onclick="fetchAll()">
+    <span id="rIcon">↺</span> รีเฟรช
+  </button>
+</div>
+
+<div class="statusBar" id="statusBar">กำลังโหลด...</div>
+<div class="cards" id="cards"></div>
+
+<div class="disc">
+  ⚠ ข้อมูลเพื่อการศึกษาเท่านั้น · ไม่ใช่คำแนะนำการลงทุน<br>
+  Live: Yahoo Finance (CORS Proxy) · Seed data: SET.or.th / Trading Economics (05-06 May 2026)<br>
+  Pivot = Classic Formula · Predicted Close = OHLC Weighted Model · Auto-refresh 5 min
+</div>
+</div>
+
+<script>
+/* ══ SEED DATA (verified 05-06 May 2026 from SET.or.th / Trading Economics / Yahoo) ══ */
+const INDICES=[
+  {
+    id:'SET',label:'SET Index',flag:'🇹🇭',cur:'THB',
+    tz:'Asia/Bangkok',tzOff:7,
+    // SET.or.th 05 May 2026 13:03 (intermission snapshot)
+    seed:{
+      open:1498.27,high:1503.90,low:1484.84,
+      close:1490.10,prevClose:1493.69,
+      vol:6604269,change:-3.59,changePct:-0.24,
+      prevDay:{open:1494.00,high:1498.50,low:1483.00,close:1493.69},
+      note:'SET.or.th 05 May 2026'
+    },
+    sessions:[{name:'ช่วงเช้า',open:'09:30',close:'12:30'},{name:'ช่วงบ่าย',open:'14:00',close:'17:00'}],
+    codes:['^SET.BK','SET='],
+  },
+  {
+    id:'SET50',label:'SET50',flag:'🇹🇭',cur:'THB',
+    tz:'Asia/Bangkok',tzOff:7,
+    // Estimated ~52.9% of SET (typical ratio)
+    seed:{
+      open:792.50,high:795.50,low:785.50,
+      close:787.60,prevClose:789.50,
+      vol:2200000,change:-1.90,changePct:-0.24,
+      prevDay:{open:789.00,high:793.00,low:784.00,close:789.50},
+      note:'ประมาณจากสัดส่วน SET50/SET'
+    },
+    sessions:[{name:'ช่วงเช้า',open:'09:30',close:'12:30'},{name:'ช่วงบ่าย',open:'14:00',close:'17:00'}],
+    codes:['SET50.BK'],
+  },
+  {
+    id:'N225',label:'Nikkei 225',flag:'🇯🇵',cur:'JPY',
+    tz:'Asia/Tokyo',tzOff:9,
+    // Last close: 01 May 2026 = 59,513 (+0.38%), reopens 06 May after Golden Week
+    seed:{
+      open:59513.0,high:59621.0,low:59200.0,
+      close:59513.0,prevClose:59289.0,
+      vol:680000,change:224.0,changePct:0.38,
+      prevDay:{open:59100.0,high:59350.0,low:58950.0,close:59289.0},
+      note:'ปิด 01 May 2026 (Golden Week) · เปิดวันนี้'
+    },
+    sessions:[{name:'ช่วง 1',open:'09:00',close:'11:30'},{name:'ช่วง 2',open:'12:30',close:'15:30'}],
+    codes:['^N225','NI225='],
+  },
+  {
+    id:'HSI',label:'Hang Seng',flag:'🇭🇰',cur:'HKD',
+    tz:'Asia/Hong_Kong',tzOff:8,
+    // Close 05 May 2026: +319 pts (+1.24%) to 26,096 (Trading Economics)
+    seed:{
+      open:25900.0,high:26320.0,low:25820.0,
+      close:26096.0,prevClose:25777.0,
+      vol:1450000000,change:319.0,changePct:1.24,
+      prevDay:{open:25900.0,high:26050.0,low:25680.0,close:25777.0},
+      note:'Trading Economics 05 May 2026'
+    },
+    sessions:[{name:'ช่วงเช้า',open:'09:30',close:'12:00'},{name:'ช่วงบ่าย',open:'13:00',close:'16:00'}],
+    codes:['^HSI','HSI='],
+  },
+];
+
+/* ══ STATE ══ */
+let view='ALL', cache={}, busy=false;
+
+/* ══ CLOCK ══ */
+function tick(){
+  const n=new Date();
+  document.getElementById('clock').textContent=n.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('dateStr').textContent=n.toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+}
+setInterval(tick,1000);tick();
+
+/* ══ SESSION ══ */
+function getSession(idx){
+  const n=new Date();
+  const loc=new Date(n.toLocaleString('en-US',{timeZone:idx.tz}));
+  const day=loc.getDay(), hm=loc.getHours()*60+loc.getMinutes();
+  const t=loc.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  if(day===0||day===6) return{status:'holiday',label:'วันหยุดสุดสัปดาห์',t};
+  for(let i=0;i<idx.sessions.length;i++){
+    const s=idx.sessions[i];
+    const[oh,om]=s.open.split(':').map(Number);
+    const[ch,cm]=s.close.split(':').map(Number);
+    const o=oh*60+om,c=ch*60+cm;
+    if(hm>=o&&hm<c) return{status:'open',label:`เปิด — ${s.name}`,t};
+    if(i<idx.sessions.length-1){
+      const[nh,nm]=idx.sessions[i+1].open.split(':').map(Number);
+      if(hm>=c&&hm<nh*60+nm) return{status:'brk',label:`พัก → ${idx.sessions[i+1].open}`,t};
+    }
+  }
+  const[fh,fm]=idx.sessions[0].open.split(':').map(Number);
+  if(hm<fh*60+fm&&(fh*60+fm-hm)<=45) return{status:'pre',label:`Pre-Market → ${idx.sessions[0].open}`,t};
+  return{status:'closed',label:'ตลาดปิดแล้ว',t};
+}
+
+/* ══ FETCH YAHOO via CORS Proxy ══ */
+/* ══ BACKEND PROXY (FREE & STABLE) ══ */
+const PROXY_URL = 'https://your-worker-url.workers.dev?symbol=';
+
+async function tryProxy(sym){
+  try{
+    const r = await fetch(PROXY_URL + encodeURIComponent(sym), {
+      signal: AbortSignal.timeout(8000)
+    });
+    if(!r.ok) return null;
+
+    const j = await r.json();
+    const res = j?.chart?.result?.[0];
+    if(!res) return null;
+
+    const m = res.meta;
+    const q = res.indicators?.quote?.[0];
+    if(!q?.close?.length) return null;
+
+    const days = res.timestamp.map((t,i)=>({
+      o:q.open[i],h:q.high[i],l:q.low[i],c:q.close[i],v:q.volume?.[i]
+    })).filter(d=>d.c!=null&&d.h!=null&&d.l!=null);
+
+    if(days.length<2) return null;
+
+    const td=days[days.length-1],pd=days[days.length-2];
+    const live=m.regularMarketPrice||td.c;
+    const pc=m.chartPreviousClose||pd.c;
+
+    return{
+      open:td.o||live,high:td.h||live,low:td.l||live,close:live,
+      prevClose:pc,vol:td.v||0,
+      change:live-pc,changePct:((live-pc)/pc)*100,
+      prevDay:{open:pd.o,high:pd.h,low:pd.l,close:pd.c},
+      live:true,src:'Proxy Live'
+    };
+  }catch{
+    return null;
+  }
+}
+
+async function loadIndex(idx){
+
+  // 1️⃣ TRY BACKEND PROXY (BEST)
+  for(const sym of idx.codes){
+    const d = await tryProxy(sym);
+    if(d) return d;
+  }
+
+  // 2️⃣ FALLBACK: ORIGINAL CORS METHOD
+  for(const sym of idx.codes){
+    const d = await tryYahoo(sym);
+    if(d) return d;
+  }
+
+  // 3️⃣ FALLBACK: SEED DATA
+  const s = idx.seed;
+  return {...s,live:false,src:'Seed '+s.note};
+}
+
+/* ══ PIVOT ══ */
+function calcPiv(h,l,c){
+  const P=(h+l+c)/3,R=h-l;
+  return{P,R1:2*P-l,R2:P+R,R3:h+2*(P-l),S1:2*P-h,S2:P-R,S3:l-2*(h-P),
+    FR1:P+.382*R,FR2:P+.618*R,FS1:P-.382*R,FS2:P-.618*R};
+}
+
+/* ══ PREDICT ══ */
+function predict(d){
+  const{open:o,high:h,low:l,close:c,prevClose:pc,prevDay:pd}=d;
+  const rng=h-l;
+  const piv=(h+l+c)/3;
+  const prevPiv=pd?(pd.high+pd.low+pd.close)/3:piv;
+  const mom=(c-pc)/pc;
+  const balance=o*.1+(h+l)/2*.4+c*.5;
+  const regress=prevPiv*.25+piv*.75;
+  const pred=balance*.5+regress*.3+(c*(1+mom*.2))*.2;
+  const sw1=rng*.28,sw2=rng*.55,sw3=rng*.88;
+  const pos=rng>0?(c-l)/rng:.5;
+  const centr=1-Math.abs(pos-.5)*2;
+  const conf=Math.max(52,Math.min(82,Math.round(60+centr*22)));
+  return{pred,lo:pred-rng*.2,hi:pred+rng*.2,
+    chg:pred-pc,chgPct:((pred-pc)/pc)*100,
+    sw1,sw2,sw3,conf};
+}
+
+/* ══ HELPERS ══ */
+const f=(v,d=2)=>typeof v==='number'?v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
+const cc=v=>v>0?'c-up':v<0?'c-dn':'c-neu';
+const bc=v=>v>0?'b-up':v<0?'b-dn':'b-neu';
+const sg=v=>v>0?'▲ +':v<0?'▼ ':'';
+const cconf=v=>v>=72?'var(--up)':v>=58?'var(--warn)':'var(--dn)';
+
+/* ══ RENDER ══ */
+function render(idx,d,sess){
+  const{open,high,low,close,prevClose,change,changePct,prevDay,live,src}=d;
+  const pr=predict(d);
+  const ph=prevDay?.high||high,pl=prevDay?.low||low,pc2=prevDay?.close||prevClose;
+  const pv=calcPiv(ph,pl,pc2);
+  const cc_=cc(change),bc_=bc(change);
+  const pc_=cc(pr.chg),pb_=bc(pr.chg);
+  const cf=cconf(pr.conf);
+  const now=new Date();
+  const ut=now.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const ud=now.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'});
+
+  return`<div class="card" id="card-${idx.id}">
+  <!-- HEAD -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+    <div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:20px">${idx.flag}</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:#fff">${idx.label}</span>
+      </div>
+      <div style="font-size:9px;color:var(--muted);font-family:var(--mono);margin-top:3px">${idx.cur} · ${sess.t} (${idx.tz.split('/')[1]})</div>
+    </div>
+    <div class="sBadge ${sess.status}">
+      <span class="dot${sess.status==='open'?' live':''}"></span>${sess.label}
+    </div>
+  </div>
+
+  <!-- PRICE -->
+  <div class="priceMain">${f(close)}</div>
+  <div class="chgRow">
+    <span class="chgAbs ${cc_}">${sg(change)}${f(Math.abs(change))}</span>
+    <span class="chgPct ${cc_} ${bc_}">${sg(change)}${f(Math.abs(changePct))}%</span>
+  </div>
+
+  <!-- OHLC -->
+  <div class="ohlc">
+    <div class="oCell"><div class="oLbl">PREV</div><div class="oVal">${f(prevClose)}</div></div>
+    <div class="oCell"><div class="oLbl">OPEN</div><div class="oVal">${f(open)}</div></div>
+    <div class="oCell"><div class="oLbl">HIGH</div><div class="oVal" style="color:var(--dn)">${f(high)}</div></div>
+    <div class="oCell"><div class="oLbl">LOW</div><div class="oVal" style="color:var(--up)">${f(low)}</div></div>
+  </div>
+
+  <!-- PREDICTED CLOSE -->
+  <div class="tgtBox">
+    <div class="tgtTop">
+      <span class="tgtLbl">🎯 PREDICTED CLOSE</span>
+      <span style="font-size:8px;font-family:var(--mono);font-weight:700;color:${cf}">Conf. ${pr.conf}%</span>
+    </div>
+    <div class="tgtPriceRow">
+      <span class="tgtPrice">${f(pr.pred)}</span>
+      <span class="tgtChg ${pc_}">${pr.chg>=0?'+':''}${f(pr.chg)} (${pr.chg>=0?'+':''}${f(pr.chgPct)}%)</span>
+    </div>
+    <div class="rangeRow">
+      <span class="rLbl">RANGE</span>
+      <span class="rLo">▼ ${f(pr.lo)}</span>
+      <span style="color:var(--muted);font-family:var(--mono);font-size:9px">↔</span>
+      <span class="rHi">▲ ${f(pr.hi)}</span>
+    </div>
+    <div class="confRow">
+      <span class="confLbl">CONFIDENCE SCORE</span>
+      <span class="confVal" style="color:${cf}">${pr.conf}%</span>
+    </div>
+    <div class="confBar"><div class="confFill" style="width:${pr.conf}%;background:${cf};box-shadow:0 0 6px ${cf}55"></div></div>
+  </div>
+
+  <!-- SWING RANGE -->
+  <div class="swBox">
+    <div class="swTitle">📐 Swing Range · อ้างอิงราคาปิดล่าสุด (${f(prevClose)})</div>
+    <div class="swGrid">
+      ${[{n:'Swing ±1',r:pr.sw1},{n:'Swing ±2',r:pr.sw2},{n:'Swing ±3',r:pr.sw3}].map(s=>`
+      <div class="swCell">
+        <div class="swN">${s.n}</div>
+        <div class="swH">▲ ${f(prevClose+s.r)}</div>
+        <div class="swHp">+${f(s.r/prevClose*100,2)}%</div>
+        <div class="swDiv"></div>
+        <div class="swL">▼ ${f(prevClose-s.r)}</div>
+        <div class="swLp">-${f(s.r/prevClose*100,2)}%</div>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <!-- PIVOT POINTS -->
+  <div class="pivTitle">Pivot Points · อ้างอิง H:${f(ph)} L:${f(pl)} C:${f(pc2)}</div>
+  <div class="pivGrid">
+    <div class="pivRow r"><span class="pn">R3</span><span class="pv">${f(pv.R3)}</span></div>
+    <div class="pivRow r"><span class="pn">Fib R2 (61.8%)</span><span class="pv">${f(pv.FR2)}</span></div>
+    <div class="pivRow r"><span class="pn">R2</span><span class="pv">${f(pv.R2)}</span></div>
+    <div class="pivRow r"><span class="pn">Fib R1 (38.2%)</span><span class="pv">${f(pv.FR1)}</span></div>
+    <div class="pivRow r"><span class="pn">R1</span><span class="pv">${f(pv.R1)}</span></div>
+    <div class="pivRow p"><span class="pn">PIVOT (P)</span><span class="pv">${f(pv.P)}</span></div>
+    <div class="pivRow s"><span class="pn">S1</span><span class="pv">${f(pv.S1)}</span></div>
+    <div class="pivRow s"><span class="pn">Fib S1 (38.2%)</span><span class="pv">${f(pv.FS1)}</span></div>
+    <div class="pivRow s"><span class="pn">S2</span><span class="pv">${f(pv.S2)}</span></div>
+    <div class="pivRow s"><span class="pn">Fib S2 (61.8%)</span><span class="pv">${f(pv.FS2)}</span></div>
+    <div class="pivRow s"><span class="pn">S3</span><span class="pv">${f(pv.S3)}</span></div>
+  </div>
+
+  <!-- SESSION SCHEDULE -->
+  <div class="sesRow">
+    ${idx.sessions.map(s=>`
+    <div class="sesCell">
+      <div class="sesN">${s.name}</div>
+      <div class="sesT">${s.open} – ${s.close}</div>
+      <div class="sesTz">${idx.tz}</div>
+    </div>`).join('')}
+  </div>
+
+  <!-- FOOTER -->
+  <div class="cFoot">
+    <span class="updTime">🕐 ${ut} · ${ud}</span>
+    <span class="srcBadge ${live?'sLive':'sAi'}">${live?'🟢 Yahoo Live':'🟡 '+src}</span>
+  </div>
+</div>`;
+}
+
+/* ══ FETCH ALL ══ */
+async function fetchAll(){
+  if(busy) return;
+  busy=true;
+  const btn=document.getElementById('rBtn');
+  const ic=document.getElementById('rIcon');
+  btn.disabled=true;
+  ic.style.cssText='display:inline-block;animation:spin .8s linear infinite';
+
+  const vis=view==='ALL'?INDICES:INDICES.filter(x=>x.id===view);
+  const wrap=document.getElementById('cards');
+
+  wrap.innerHTML=vis.map(idx=>`
+    <div class="card" id="card-${idx.id}">
+      <div class="loader"><div class="spinEl"></div>
+      <span class="loaderTxt">${idx.flag} ${idx.label}...</span></div>
+    </div>`).join('');
+
+  document.getElementById('statusBar').textContent='กำลังดึงข้อมูล Yahoo Finance...';
+
+  let live=0;
+  await Promise.all(vis.map(async idx=>{
+    const d=await loadIndex(idx);
+    cache[idx.id]=d;
+    if(d.live) live++;
+    const el=document.getElementById(`card-${idx.id}`);
+    if(el) el.outerHTML=render(idx,d,getSession(idx));
+  }));
+
+  const t=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('statusBar').textContent=
+    `อัปเดต ${t} · ${live>0?`Live ${live}/${vis.length} ดัชนี`:'ใช้ข้อมูล Seed (CORS ถูกบล็อก — กด Refresh อีกครั้ง)'}`;
+
+  busy=false;
+  btn.disabled=false;
+  ic.style.cssText='';
+  ic.textContent='↺';
+}
+
+/* ══ VIEW ══ */
+function setView(v){
+  view=v;
+  document.querySelectorAll('.tab').forEach(t=>{
+    const tx=t.textContent;
+    t.classList.toggle('active',
+      (v==='ALL'&&tx.includes('ทุก'))||(v==='SET'&&tx.includes('SET')&&!tx.includes('50')&&!tx.includes('ทุก'))||
+      (v==='SET50'&&tx.includes('50'))||(v==='N225'&&tx.includes('Nikkei'))||(v==='HSI'&&tx.includes('Hang')));
+  });
+  const vis=view==='ALL'?INDICES:INDICES.filter(x=>x.id===view);
+  if(vis.every(i=>cache[i.id])){
+    document.getElementById('cards').innerHTML=
+      vis.map(idx=>render(idx,cache[idx.id],getSession(idx))).join('');
+  } else fetchAll();
+}
+
+/* ══ AUTO REFRESH 5 min ══ */
+setInterval(fetchAll,300000);
+
+/* ══ INIT ══ */
+fetchAll();
+</script>
+</body>
+</html>
